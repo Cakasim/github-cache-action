@@ -10931,7 +10931,9 @@ exports.reserveCache = reserveCache;
 function saveCache(cacheId, archivePath, options) {
     return __awaiter(this, void 0, void 0, function* () {
         const cacheKey = cacheIds[cacheId];
-        const cacheFile = `/cache/${cacheKey}/cache.tar`;
+        const cacheDir = `/cache/${cacheKey}`;
+        const cacheFile = `${cacheDir}/cache.tar`;
+        yield fs.promises.mkdir(cacheDir, { recursive: true });
         yield fs.promises.copyFile(archivePath, cacheFile);
         core.info(`Cache saved successfully, saved ${archivePath} to ${cacheFile}`);
     });

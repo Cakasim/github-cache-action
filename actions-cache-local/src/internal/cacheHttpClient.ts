@@ -109,7 +109,9 @@ export async function saveCache(
   options?: UploadOptions
 ): Promise<void> {
   const cacheKey = cacheIds[cacheId]
-  const cacheFile = `/cache/${cacheKey}/cache.tar`
+  const cacheDir = `/cache/${cacheKey}`
+  const cacheFile = `${cacheDir}/cache.tar`
+  await fs.promises.mkdir(cacheDir, { recursive: true })
   await fs.promises.copyFile(archivePath, cacheFile)
   core.info(`Cache saved successfully, saved ${archivePath} to ${cacheFile}`)
 }
