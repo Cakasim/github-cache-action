@@ -1,7 +1,6 @@
 import * as core from '@actions/core'
 import * as crypto from 'crypto'
 import * as fs from 'fs'
-import {URL} from 'url'
 
 import {CompressionMethod} from './constants'
 import {
@@ -13,10 +12,11 @@ import {
 import {
   DownloadOptions,
   UploadOptions,
-  getDownloadOptions,
 } from '../options'
 
 const versionSalt = '1.0'
+
+const cacheIds: { [cacheId: number]: string } = {}
 
 export function getCacheVersion(
   paths: string[],
@@ -50,46 +50,31 @@ export async function getCacheEntry(
   paths: string[],
   options?: InternalCacheOptions
 ): Promise<ArtifactCacheEntry | null> {
-  const version = getCacheVersion(
+  const cacheVersion = getCacheVersion(
     paths,
     options?.compressionMethod,
     options?.enableCrossOsArchive
   )
 
-  // Create ArtifactCacheEntry based on keys and version
-  // Find a way to return 204 no content aka no cache entry
-  const __error_looking_up_cache = false
-  const __no_cache_entry = true
-
-  if (__error_looking_up_cache) {
-    throw new Error(`Error looking up the cache`)
+  let fileStat: fs.Stats | undefined
+  let cacheKey: string | undefined
+  for (let i = 0; i < keys.length && !fileStat; i++) {
+    try {
+      cacheKey = keys[i]
+      fileStat = await fs.promises.stat(`/cache/${cacheKey}`)
+    } catch {}
   }
 
-  if (__no_cache_entry) {
-    // List cache for primary key only if cache miss occurs
-    if (core.isDebug()) {
-      // Output some debug information if possible
-      //await printCachesListForDiagnostics(keys[0], httpClient, version)
-    }
-
+  if (!fileStat) {
     return null
   }
 
-  const cacheResult: ArtifactCacheEntry = {}
-
-  // Do we need this?
-  const archiveLocation = cacheResult?.archiveLocation
-  if (!archiveLocation) {
-    // Cache achiveLocation not found. This should never happen, and hence bail out.
-    throw new Error('Cache not found.')
+  return {
+    cacheKey,
+    cacheVersion,
+    creationTime: fileStat.ctime.toISOString(),
+    archiveLocation: `/cache/${cacheKey}/cache.tar`,
   }
-
-  // Not needed, no secret at all
-  // core.setSecret(cacheDownloadUrl)
-  core.debug(`Cache Result:`)
-  core.debug(JSON.stringify(cacheResult))
-
-  return cacheResult
 }
 
 export async function downloadCache(
@@ -97,10 +82,7 @@ export async function downloadCache(
   archivePath: string,
   options?: DownloadOptions
 ): Promise<void> {
-  const archiveUrl = new URL(archiveLocation)
-  const downloadOptions = getDownloadOptions(options)
-
-  // Simply mv the archive from archiveLocation to archivePath
+  return fs.promises.copyFile(archiveLocation, archivePath)
 }
 
 // Reserve Cache
@@ -109,14 +91,14 @@ export async function reserveCache(
   paths: string[],
   options?: InternalCacheOptions
 ): Promise<ITypedResponseWithError<ReserveCacheResponse>> {
-  // No need to reserve anything for local fs cache
-  // But we need to store the cache information under a cache ID for later use by saveCache :(
+  const cacheId = Object.keys(cacheIds).length + 1
+  cacheIds[cacheId] = key
 
   return {
     statusCode: 200,
     headers: {},
     result: {
-      cacheId: 1 // dummy value
+      cacheId,
     }
   }
 }
@@ -126,7 +108,7 @@ export async function saveCache(
   archivePath: string,
   options?: UploadOptions
 ): Promise<void> {
-  // Save the given archivePath under the cache ID (lookup)
-
+  const cacheKey = cacheIds[cacheId]
+  await fs.promises.copyFile(archivePath, `/cache/${cacheKey}/cache.tar`)
   core.info('Cache saved successfully')
 }

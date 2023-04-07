@@ -8770,109 +8770,6 @@ module.exports = require("http");
 
 /***/ }),
 
-/***/ 608:
-/***/ (function(__unusedmodule, exports, __webpack_require__) {
-
-"use strict";
-
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.getDownloadOptions = exports.getUploadOptions = void 0;
-const core = __importStar(__webpack_require__(236));
-/**
- * Returns a copy of the upload options with defaults filled in.
- *
- * @param copy the original upload options
- */
-function getUploadOptions(copy) {
-    const result = {
-        uploadConcurrency: 4,
-        uploadChunkSize: 32 * 1024 * 1024
-    };
-    if (copy) {
-        if (typeof copy.uploadConcurrency === 'number') {
-            result.uploadConcurrency = copy.uploadConcurrency;
-        }
-        if (typeof copy.uploadChunkSize === 'number') {
-            result.uploadChunkSize = copy.uploadChunkSize;
-        }
-    }
-    core.debug(`Upload concurrency: ${result.uploadConcurrency}`);
-    core.debug(`Upload chunk size: ${result.uploadChunkSize}`);
-    return result;
-}
-exports.getUploadOptions = getUploadOptions;
-/**
- * Returns a copy of the download options with defaults filled in.
- *
- * @param copy the original download options
- */
-function getDownloadOptions(copy) {
-    const result = {
-        useAzureSdk: true,
-        downloadConcurrency: 8,
-        timeoutInMs: 30000,
-        segmentTimeoutInMs: 600000,
-        lookupOnly: false
-    };
-    if (copy) {
-        if (typeof copy.useAzureSdk === 'boolean') {
-            result.useAzureSdk = copy.useAzureSdk;
-        }
-        if (typeof copy.downloadConcurrency === 'number') {
-            result.downloadConcurrency = copy.downloadConcurrency;
-        }
-        if (typeof copy.timeoutInMs === 'number') {
-            result.timeoutInMs = copy.timeoutInMs;
-        }
-        if (typeof copy.segmentTimeoutInMs === 'number') {
-            result.segmentTimeoutInMs = copy.segmentTimeoutInMs;
-        }
-        if (typeof copy.lookupOnly === 'boolean') {
-            result.lookupOnly = copy.lookupOnly;
-        }
-    }
-    const segmentDownloadTimeoutMins = process.env['SEGMENT_DOWNLOAD_TIMEOUT_MINS'];
-    if (segmentDownloadTimeoutMins &&
-        !isNaN(Number(segmentDownloadTimeoutMins)) &&
-        isFinite(Number(segmentDownloadTimeoutMins))) {
-        result.segmentTimeoutInMs = Number(segmentDownloadTimeoutMins) * 60 * 1000;
-    }
-    core.debug(`Use Azure SDK: ${result.useAzureSdk}`);
-    core.debug(`Download concurrency: ${result.downloadConcurrency}`);
-    core.debug(`Request timeout (ms): ${result.timeoutInMs}`);
-    core.debug(`Cache segment download timeout mins env var: ${process.env['SEGMENT_DOWNLOAD_TIMEOUT_MINS']}`);
-    core.debug(`Segment download timeout (ms): ${result.segmentTimeoutInMs}`);
-    core.debug(`Lookup only: ${result.lookupOnly}`);
-    return result;
-}
-exports.getDownloadOptions = getDownloadOptions;
-//# sourceMappingURL=options.js.map
-
-/***/ }),
-
 /***/ 609:
 /***/ (function(__unusedmodule, exports, __webpack_require__) {
 
@@ -11271,9 +11168,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.saveCache = exports.reserveCache = exports.downloadCache = exports.getCacheEntry = exports.getCacheVersion = void 0;
 const core = __importStar(__webpack_require__(236));
 const crypto = __importStar(__webpack_require__(417));
-const url_1 = __webpack_require__(835);
-const options_1 = __webpack_require__(608);
+const fs = __importStar(__webpack_require__(747));
 const versionSalt = '1.0';
+const cacheIds = {};
 function getCacheVersion(paths, compressionMethod, enableCrossOsArchive = false) {
     const components = paths;
     // Add compression method to cache version to restore
@@ -11295,55 +11192,44 @@ function getCacheVersion(paths, compressionMethod, enableCrossOsArchive = false)
 exports.getCacheVersion = getCacheVersion;
 function getCacheEntry(keys, paths, options) {
     return __awaiter(this, void 0, void 0, function* () {
-        const version = getCacheVersion(paths, options === null || options === void 0 ? void 0 : options.compressionMethod, options === null || options === void 0 ? void 0 : options.enableCrossOsArchive);
-        // Create ArtifactCacheEntry based on keys and version
-        // Find a way to return 204 no content aka no cache entry
-        const __error_looking_up_cache = false;
-        const __no_cache_entry = true;
-        if (__error_looking_up_cache) {
-            throw new Error(`Error looking up the cache`);
-        }
-        if (__no_cache_entry) {
-            // List cache for primary key only if cache miss occurs
-            if (core.isDebug()) {
-                // Output some debug information if possible
-                //await printCachesListForDiagnostics(keys[0], httpClient, version)
+        const cacheVersion = getCacheVersion(paths, options === null || options === void 0 ? void 0 : options.compressionMethod, options === null || options === void 0 ? void 0 : options.enableCrossOsArchive);
+        let fileStat;
+        let cacheKey;
+        for (let i = 0; i < keys.length && !fileStat; i++) {
+            try {
+                cacheKey = keys[i];
+                fileStat = yield fs.promises.stat(`/cache/${cacheKey}`);
             }
+            catch (_a) { }
+        }
+        if (!fileStat) {
             return null;
         }
-        const cacheResult = {};
-        // Do we need this?
-        const archiveLocation = cacheResult === null || cacheResult === void 0 ? void 0 : cacheResult.archiveLocation;
-        if (!archiveLocation) {
-            // Cache achiveLocation not found. This should never happen, and hence bail out.
-            throw new Error('Cache not found.');
-        }
-        // Not needed, no secret at all
-        // core.setSecret(cacheDownloadUrl)
-        core.debug(`Cache Result:`);
-        core.debug(JSON.stringify(cacheResult));
-        return cacheResult;
+        return {
+            cacheKey,
+            cacheVersion,
+            creationTime: fileStat.ctime.toISOString(),
+            archiveLocation: `/cache/${cacheKey}/cache.tar`,
+        };
     });
 }
 exports.getCacheEntry = getCacheEntry;
 function downloadCache(archiveLocation, archivePath, options) {
     return __awaiter(this, void 0, void 0, function* () {
-        const archiveUrl = new url_1.URL(archiveLocation);
-        const downloadOptions = (0, options_1.getDownloadOptions)(options);
-        // Simply mv the archive from archiveLocation to archivePath
+        return fs.promises.copyFile(archiveLocation, archivePath);
     });
 }
 exports.downloadCache = downloadCache;
 // Reserve Cache
 function reserveCache(key, paths, options) {
     return __awaiter(this, void 0, void 0, function* () {
-        // No need to reserve anything for local fs cache
-        // But we need to store the cache information under a cache ID for later use by saveCache :(
+        const cacheId = Object.keys(cacheIds).length + 1;
+        cacheIds[cacheId] = key;
         return {
             statusCode: 200,
             headers: {},
             result: {
-                cacheId: 1 // dummy value
+                cacheId,
             }
         };
     });
@@ -11351,7 +11237,8 @@ function reserveCache(key, paths, options) {
 exports.reserveCache = reserveCache;
 function saveCache(cacheId, archivePath, options) {
     return __awaiter(this, void 0, void 0, function* () {
-        // Save the given archivePath under the cache ID (lookup)
+        const cacheKey = cacheIds[cacheId];
+        yield fs.promises.copyFile(archivePath, `/cache/${cacheKey}/cache.tar`);
         core.info('Cache saved successfully');
     });
 }
@@ -11478,13 +11365,6 @@ function partialMatch(patterns, itemPath) {
 }
 exports.partialMatch = partialMatch;
 //# sourceMappingURL=internal-pattern-helper.js.map
-
-/***/ }),
-
-/***/ 835:
-/***/ (function(module) {
-
-module.exports = require("url");
 
 /***/ }),
 
