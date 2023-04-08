@@ -94,3 +94,6 @@ typings/
 
 # Text editor files
 .vscode/
+
+# Customized GitHub Actions Toolkit
+github-actions-toolkit/
