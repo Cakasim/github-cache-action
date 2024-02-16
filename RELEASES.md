@@ -107,3 +107,16 @@
 ### 3.3.1
 
 - Reduced segment size to 128MB and segment timeout to 10 minutes to fail fast in case the cache download is stuck.
+
+### 3.3.2
+
+- Fixes bug with Azure SDK causing blob downloads to get stuck.
+
+### 3.3.3
+
+- Updates @actions/cache to v3.2.3 to fix accidental mutated path arguments to `getCacheVersion` [actions/toolkit#1378](https://github.com/actions/toolkit/pull/1378)
+- Additional audit fixes of npm package(s)
+
+### 4.0.0
+
+- Updated minimum runner version support from node 12 -> node 20
